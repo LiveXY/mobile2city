@@ -1,4 +1,4 @@
-# mobile2city
+# mobile2city中国手机号转换城市
 * CityInfo:332行
 * CityMobile:216064行
 
