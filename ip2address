@@ -4,15 +4,7 @@ if (args.length == 0) process.exit();
 
 var request = require('request');
 var util = require('util');
-
-var list = null, keys = {}, index = 0;
 String.prototype.padLeft = function(l,c) {return Array(l-this.length+1).join(c||" ")+this}
-
-for(var i in args) {
-	list = args[i].match(/((\d+)\.(\d+)\.(\d+)\.(\d+))/ig);
-	if (list && list.length>0) for(var j in list) if (!keys[list[j]]) keys[list[j]] = true;
-}
-list = []; for(var ip in keys) list.push(ip);
 
 var urls = [
 	'http://api.map.baidu.com/location/ip?ak=F454f8a5efe5e577997931cc01de3974&ip=%s',
@@ -21,8 +13,8 @@ var urls = [
 	'http://freeapi.ipip.net/%s',
 	'http://int.dpool.sina.com.cn/iplookup/iplookup.php?format=js&ip=%s'
 ];
-var apis = [
-	function getBaidu(ip) {
+var apis = {
+	baidu: function getBaidu(ip) {
 		request(util.format(urls[0], ip), function (error, response, body) {
 			if (!error && response.statusCode == 200) {
 				//console.log(body);
@@ -37,8 +29,8 @@ var apis = [
 			index++;
 			get();
 		})
-	}
-	, function getTaobao(ip) {
+	},
+	taobao: function getTaobao(ip) {
 		request(util.format(urls[1], ip), function (error, response, body) {
 			if (!error && response.statusCode == 200) {
 				//console.log(body);
@@ -52,8 +44,8 @@ var apis = [
 			index++;
 			get();
 		})
-	}
-	, function getTaobao2(ip) {
+	},
+	taobao2: function getTaobao2(ip) {
 		request(util.format(urls[2], ip), function (error, response, body) {
 			if (!error && response.statusCode == 200) {
 				//console.log(body);
@@ -67,8 +59,8 @@ var apis = [
 			index++;
 			get();
 		})
-	}
-	, function getIpIp(ip) {
+	},
+	ipip: function getIpIp(ip) {
 		request(util.format(urls[3], ip), function (error, response, body) {
 			if (!error && response.statusCode == 200) {
 				//console.log(body);
@@ -81,8 +73,8 @@ var apis = [
 			index++;
 			get();
 		})
-	}
-	, function getSina(ip) {
+	},
+	sina: function getSina(ip) {
 		request(util.format(urls[4], ip), function (error, response, body) {
 			if (!error && response.statusCode == 200) {
 				body = body.replace('var remote_ip_info = ', '');
@@ -98,13 +90,26 @@ var apis = [
 			get();
 		})
 	}
-];
+};
+
+var list = null, keys = {}, index = 0, use = [];
+if (args.length > 1) {
+	var tmp = args[0].split('#');
+	for(var k in apis) if (tmp.indexOf(k) != -1 && use.indexOf(k) == -1 && k.length>0) use.push(k);
+	if (use.length > 0) args.splice(0, 1);
+}
+if (use.length == 0) for(var k in apis) use.push(k);
+
+for(var i in args) {
+	list = args[i].match(/((\d+)\.(\d+)\.(\d+)\.(\d+))/ig);
+	if (list && list.length>0) for(var j in list) if (!keys[list[j]]) keys[list[j]] = true;
+}
+list = []; for(var ip in keys) list.push(ip);
 
 function get() {
 	if (list.length == 0) process.exit();
 	var ip = list[0];
-	//console.log(ip);
-	apis[index%apis.length](ip);
+	apis[use[index%use.length]](ip);
 };
 
 get();
