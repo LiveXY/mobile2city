@@ -1,0 +1,14 @@
+{
+  "name": "mobile2city",
+  "description": "mobile2city",
+  "version": "0.0.1",
+  "private": true,
+  "bin": {
+    "mobile2city": "mobile2city",
+    "ip2address": "ip2address"
+  },
+  "dependencies": {
+    "request": "*",
+    "sqlite3": "*"
+  }
+}

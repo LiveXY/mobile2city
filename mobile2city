@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+var args = process.argv.splice(2, process.argv.length - 2);
+if (args.length == 0) process.exit();
+
+var sqlite = require('sqlite3');
+var path = require('path');
+
+var data = null, list = null, keys = {};
+var db = new sqlite.Database(path.join(__dirname, 'mobile2city.db'));
+
+for(var i in args) {
+	list = args[i].match(/(1[0-9]{10})/ig);
+	if (list && list.length>0) for(var j in list) if (!keys[list[j]]) keys[list[j]] = true;
+}
+for(var m in keys) get(m);
+
+function get(m) {
+	db.all("select Province,CityName,CityCode,PostCode from CityMobile where Mobile=? limit 1;", [m.substr(0, 7)], function(err, results) {
+		data = results && results.length>0 ? results[0] : null;
+		if (!data) console.log(m, ': null');
+		else console.log(m, ':', data.CityCode, data.PostCode, data.Province, data.CityName);
+	});
+};
