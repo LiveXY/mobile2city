@@ -1,0 +1,176 @@
+#!/usr/bin/env node
+var args = process.argv.splice(2, process.argv.length - 2);
+if (args.length == 0) process.exit();
+
+var fs = require('fs');
+var sqlite = require('sqlite3');
+var request = require('request');
+var path = require('path');
+var errObjFile = __dirname + '/errobj'+args[0]+'.json';
+
+var citys = {}, timer = 1000, index = -1;
+var db = new sqlite.Database(path.join(__dirname, 'mobile2city.db'));
+var errObj = {};
+
+readErrObj().then(getCitys).then(getMaxMobile).then(processMobile);
+
+function saveErrObj() {
+	return new Promise((resolve, reject) => {
+		fs.writeFile(errObjFile, JSON.stringify(errObj), 'utf8', (err, result) => {
+			resolve(null);
+		});
+	});
+}
+function readErrObj() {
+	if (!fs.existsSync(errObjFile)) return Promise.resolve(null);
+
+	return new Promise((resolve, reject) => {
+		fs.readFile(errObjFile, 'utf8', (err, result) => {
+			result = result && result.indexOf('{') == 0 ? result : null;
+			errObj = JSON.parse(result);
+			//console.log(errObj);
+			resolve(1);
+		});
+	});
+}
+
+function processMobile(d) {
+	if (!d) return;
+	console.log(d.Count, d.List.length);
+	var max = d.List.length;
+	if (max == 0) return;
+
+	var next = function() {
+		index++;
+		if (index > max-1) return;
+		setTimeout(function() {
+			requestMobile(d.List[index]).then(saveMobile).then(next);
+		}, timer);
+	}
+	next();
+}
+function requestMobile(m) {
+	var time = +new Date();
+	var url = "http://v.showji.com/Locating/showji.com2016234999234.aspx?m="+m+"&output=json&callback=querycallback&timestamp="+time;
+	var headers = {
+		'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+		'Cookie': 'Hm_lvt_cece293c497d01e523253e4ca5308cda=1495688461',
+		'Host': 'v.showji.com'
+	};
+	console.log(url);
+	return new Promise(function(resolve, reject) {
+		request({ url: url, headers: headers }, function (error, response, body) {
+			if (!error && response.statusCode == 200) {
+				body = body.replace('querycallback({', '{').replace('});', '}');
+				if (body.indexOf('{') == 0) {
+					body = JSON.parse(body);
+					//console.log(body);
+					if (body && body.QueryResult == 'True') {
+						var province = body.Province;
+						var city = body.City;
+						var areaCode = body.AreaCode;
+						var postCode = body.PostCode;
+						var to = body.TO;
+						if (areaCode && city && province) {
+							areaCode = (areaCode + '0000000000').substring(0, 4);
+							var c = citys[areaCode];
+							if (c && c.CityCode) {
+								var cstcode = to == '中国移动' ? 1 : (to == '中国联通' ? 2 : 3);
+								var d = [m, areaCode, c.CityName, c.ProvinceCode, c.Province, postCode, cstcode];
+								console.log(d);
+								timer = 1000;
+								return resolve(d);
+							}
+						}
+					}
+					console.log(body);
+					timer = 1000;
+					errObj[m] = 1;
+					saveErrObj();
+					return resolve([0]);
+				}
+			}
+			timer = 5000;
+			index--;
+			resolve(null);
+		});
+	});
+}
+function getCitys() {
+	return new Promise(function(resolve, reject) {
+		db.all("select * from CityInfo", function(err, results) {
+			if (err) return resolve(null);
+			var len = results.length;
+			if (len == 0) return resolve(null);
+			for (var i = 0; i < len; i++) citys[results[i].CityCode] = results[i];
+			resolve(1);
+		});
+	});
+}
+function getMaxMobile() {
+	var min = parseInt(args[0]+'0000'), max = parseInt(args[0]+'9999');
+	var all = []; for (var i = min; i <= max; i++) all.push(i);
+	console.log(min, max, all.length);
+	return new Promise(function(resolve, reject) {
+		db.all("select Mobile from CityMobile where Mobile>=? and Mobile<=?", [min, max], function(err, results) {
+			if (err) return resolve(null);
+			var len = results.length, obj = {}, list = [];
+			if (len == 0) return resolve({ Count: 0, List: all });
+			for (var i = 0; i < len; i++) obj[results[i].Mobile] = 1;
+			for (var i = min; i <= max; i++) if (!obj[i] && !errObj[i]) list.push(i);
+			resolve({ Count: len, List: list });
+		});
+	});
+};
+function saveMobile(items) {
+	return new Promise(function(resolve, reject) {
+		if (!items || !items[0]) return resolve(1);
+		db.run("insert into CityMobile(Mobile,CityCode,CityName,ProvinceCode,Province,CstCode,PostCode) values(?,?,?,?,?,?,?)", items, function(err, results) {
+			if (err) console.error(err);
+			resolve(err ? 1 : 0);
+		});
+	});
+}
+
+/*
+select substr(Mobile,0,4) as mob, count(Mobile) c from CityMobile group by mob order by c desc
+131,10000
+135,10000
+136,10000
+150,10000
+151,10000
+152,10000
+155,10000
+158,10000
+159,10000
+132,10000
+139,9998
+189,9995
+138,9994
+187,9980
+137,9976
+183,9975
+182,9970
+181,9965
+186,9960
+130,9879
+177,9851
+153,9848
+180,9837
+156,9802
+188,9750
+134,9746
+147,9719
+133,9648
+184,9074
+185,9055
+145,8378
+157,8266
+176,7436
+178,6969
+
+
+电信号段:133/153/180/181/189/177
+联通号段:130/131/132/155/156/185/186/145/176
+移动号段:134/135/136/137/138/139/150/151/152/157/158/159/182/183/184/187/188/147/178
+*/

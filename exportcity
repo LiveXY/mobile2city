@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+var args = process.argv.splice(2, process.argv.length - 2);
+
+var sqlite = require('sqlite3');
+var path = require('path');
+
+var db = new sqlite.Database(path.join(__dirname, 'mobile2city.db'));
+
+var where = '', table = 'CityMobile';
+if (args.length > 0) {
+	var m = parseInt(args[0]) || 0;
+	if (m > 0) where = getWhere(m);
+	else {
+		table = args[0];
+		if (args.length > 1) {
+			m = parseInt(args[1]) || 0;
+			if (m > 0) where = getWhere(m);
+		}
+	}
+}
+var sql = "select * from " + table + " " + where;
+getMobile().then(showMobile);
+
+function getWhere (m) {
+	var min = parseInt(m+'0000'), max = parseInt(m+'9999');
+	var where = ' where Mobile>=' + min + ' and Mobile<=' + max;
+	return where;
+}
+function showMobile(data) {
+	if (!data) return;
+	//console.log(data.length);
+	if (data.length > 0) process.stdout.write("insert ignore into " + table + ' values');
+	for (var i = 0, len = data.length; i < len; i++) {
+		var sql = (i == 0 ? '' : ',') + '(';
+		var obj = data[i];
+		for (var k in obj) {
+			var oo = data[i][k];
+			sql +=  (typeof oo === 'string' ? ('\''+addslashes(oo)+'\'') : oo) + ',';
+		}
+		sql = sql.substring(0, sql.length-1);
+		sql += ')';
+		process.stdout.write(sql);
+	}
+	console.log('');
+}
+function addslashes(str) {
+	return (str + '').replace(/[\\"']/g, '\\$&').replace(/\u0000/g, '\\0')
+}
+function getMobile() {
+	return new Promise(function(resolve, reject) {
+		db.all(sql, function(err, results) {
+			resolve(results);
+		});
+	});
+};

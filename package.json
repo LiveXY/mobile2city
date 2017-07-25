@@ -5,7 +5,9 @@
   "private": true,
   "bin": {
     "mobile2city": "mobile2city",
-    "ip2address": "ip2address"
+    "ip2address": "ip2address",
+    "updatecity": "updatecity",
+    "exportcity": "exportcity"
   },
   "dependencies": {
     "request": "*",
